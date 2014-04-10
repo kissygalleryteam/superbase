@@ -9,8 +9,9 @@
 
 ## WHY
 
-* Base对extension的管理不够完全，extension无法在initializer之后和destructor之前处理自己的逻辑，解耦不够完全
-* Base不能在事件的defaultFn之后处理逻辑，显得defaultFn很鸡肋
+* Base中，extension无法在initializer之后处理自己的逻辑，并且没有destructor的生命周期
+* Base中，extend完之后无法选择性去扩充更多可选的extension，
+* Base中，不能在事件的defaultFn之后处理逻辑，显得defaultFn很鸡肋，Attribute中有afterAttrChange事件，但是Base不支持其他afterEvent类型事件
 
 ## 扩充的功能
 
@@ -18,6 +19,196 @@
 * 初始化和销毁时自动执行extensions的inititalizer及destructor方法
 * 提供after事件绑定，在defaultFn之后执行
 * 除了SuperBase.extend方法之外，还添加了SuperBase.mix方法，可以额外添加扩展
+
+## 使用SuperBase
+
+    KISSY.use('gallery/superbase/1.0/', function(S, SuperBase) {
+    
+        //你的代码
+    
+    });
+    
+## extend - 继承
+
+使用方法和Base.extend完全一样
+
+    var AutoComplete = SuperBase.extend([AutoCompleteSource, AutoCompleteList], {
+        initializer: function() {},
+        destructor: function() {},
+        render: function() {}
+    }, {
+        ATTRS: {
+            rendered: {
+                value: false
+            }            
+        },
+        name: 'autocomplete'
+    });
+    
+## mix - 扩充
+
+给组件扩充更多地扩展集，比如说自动完成组件AutoComplete有一个扩展AutoCompleteKeys，提供通过键盘操作上下左右选中选项的功能，这个功能是可选的。
+这样的话就不需要在extend的时候扩充进去，我们可以在autocomplete-keys.js里使用mix的方法扩充到AutoComplete里，这样新的事例就拥有键盘操作的功能了。
+
+    function AutoCompleteKeys() {}
+    
+    //more autocomplete-keys code
+    
+    AutoComplete.mix([AutoCompleteKeys]);
+    
+## initializer & destructor - 扩展集的初始化与销毁
+
+扩展和组件一样，也应该拥有初始化与销毁的生命周期，一个组件里拥有多个扩展的话，应该在new和destroy的时候正确地按顺序执行自己及扩展的initializer和destructor。
+比如AutoComplete组件拥有AutoCompleteSource,AutoCompleteList,AutoCompleteKeys三个扩展，初始化和销毁顺序如下
+
+    var AutoComplete = SuperBase.extend([AutoCompleteSource, AutoCompleteList], {}, {});
+    
+    AutoComplete.mix([AutoCompleteKeys]);
+    
+    //初始化
+    var autocomplete = new AutoComplete({});
+    
+    //销毁
+    autocomplete.destroy();
+    
+    //生命周期
+    //AutoComplete constructor
+    //AutoCompleteSource constructor
+    //AutoCompleteList constructor
+    //AutoCompleteKeys constructor
+    
+    //AutoComplete initializer
+    //AutoCompleteSource initializer
+    //AutoCompleteList initializer
+    //AutoCompleteKeys initializer
+    
+    //AutoCompleteKeys destructor
+    //AutoCompleteList destructor
+    //AutoCompleteSource destructor
+    //AutoComplete destructor
+    
+## defaultFn & after 默认事件回调与after事件
+
+我们使用自定义事件时，经常会有默认处理回调，比如AutoComplete组件，选中一个选项的时候，给该节点添加ac-selected的class
+
+    var AutoComplete = SuperBase.extend([AutoCompleteSource, AutoCompleteList], {
+        
+        initializer: function() {
+            this.publish('select', {
+                defaultFn: this._defSelectFn
+            });
+        },
+        
+        select: function(item) {
+            this.set('selectedItem', item);
+            this.fire('select', {
+                item: item
+            });
+        },
+        
+        _defSelectFn: function(e) {
+            e.item.addClass('ac-selected');
+        }
+        
+    }, {
+    
+        ATTRS: {
+            selectedItem: {
+                value: null
+            }
+        }
+    
+    });
+    
+    var autocomplete = new AutoComplete({});
+    
+    autocomplete.on('select', function(e) {
+        
+        //null
+        //defaultFn未执行
+        //此时item还未添加ac-selected的class
+        console.log(S.one('ac-selected'));
+    });
+    
+    autocomplete.select(item);
+    
+但是有时候，我们需要在defaultFn之后进行一些处理，但是Base不提供这样的功能，SuperBase中可以通过after来绑定事件
+
+    autocomplete.after('select', function(e) {
+        
+        //Node
+        //defaultFn已执行
+        console.log(S.one('ac-selected'));
+    });
+    
+    autocomplete.select(item);
+    
+这个功能有点类似Attribute的beforeAttrChange和afterAttrChange，在set(attr, value)之前执行beforeAttrChange，defaultFn中真正设置value，之后触发afterAttrChange
+当然，SuperBase中对此也进行了兼容，API更加简洁直接，例如
+    
+    //before等同于on
+    autocomplete.on('selectedItemChange', fn) == autocomplete.on('beforeSelectedItemChange', fn)
+    autocomplete.before('selectedItemChange', fn) == autocomplete.on('beforeSelectedItemChange', fn)
+    autocomplete.after('selectedItemChange', fn) == autocomplete.on('afterSelectedItemChange', fn)
+    
+另外，after事件也可以冒泡的哦
+
+    autocomplete.addTarget(parent);
+    
+    parent.after('select', function() {
+        console.log('autocomplete select');
+    });
+    
+    //autocomplete select
+    autocomplete.select(item);
+    
+事件触发的过程中，可能会冒泡，可能会调用e.preventDefault()和e.stopImmediatePropagation()的方法来阻止默认行为和立即阻止传播，SuperBase中的after也可以正确处理，整个事件的触发流程为
+
+1. on
+2. 如果调用了e.preventDefault，则defaultFn与after回调不执行
+3. 如果调用了e.stopPropagation，则停止冒泡至父组件，defaultFn和after正常执行
+4. 如果调用了e.stopImmediatePropagation，则defaultFn执行，after回调不执行
+5. defaultFn
+6. after
+    
+## doBefore & doAfter - AOP
+
+为了完善组件的扩充机制，SuperBase扩充了AOP的功能，提供了doBefore和doAfter的方法，扩展可以无缝的往组件方法注入代码，而不需要修改组件API
+    
+    S.augment(AutoCompleteSource, {
+        initializer: function() {
+            //在render方法执行之前执行_renderACSource
+            this.doBefore(this._renderACSource, this, 'render');
+        },
+        _renderACSource: function() {
+            console.log('before render');
+        }
+    });
+    
+    S.augment(AutoCompleteList, {
+        initializer: function() {
+            //在render方法执行之后执行_renderACList
+            this.doAfter(this._renderACList, this, 'render');
+        },
+        _renderACList: function() {
+            console.log('after render');
+        }
+    });
+    
+    var AutoComplete = SuperBase.extend([AutoCompleteSource, AutoCompleteList], {
+        render: function() {
+            console.log('render');
+            return this;
+        }
+    }, {});
+    
+    //初始化
+    var autocomplete = new AutoComplete({});
+    
+    //before render
+    //render
+    //after render
+    autocomplete.render();
 
 ## 常用方法
 
@@ -45,7 +236,7 @@
 
 扩充当前组件的扩展集
 
-## 简单例子
+## 生命周期例子
 
     KISSY.use('gallery/superbase/1.0/', function(S, SuperBase) {
         
