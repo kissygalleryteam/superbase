@@ -1,0 +1,17 @@
+{
+    "name": "superbase",
+    "comName":"Superbase",
+    "version": "1.0",
+    "desc": "Base模块增强，提供after事件绑定和AOP方法，合并扩展集的initializer和destructor，完善组件及扩展的生命周期",
+    "tag":"superbase,base,kissy-mini",
+    "githubName":"kingback",
+    "author": {
+        "name": "虎牙",
+        "email": "huya.nzb@alibaba-inc.com",
+        "page": "http://github.com/kingback/"
+    },
+	"flexComboPort":"8081",
+	"reserveServerPort":"8080",
+    "type": "kissy-gallery",
+    "type-url": "http://gallery.kissyui.com/guide"
+}
