@@ -1,0 +1,168 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8"/>
+    <title>Superbase的demo</title>
+    <script src="http://g.tbcdn.cn/kissy/k/1.4.1/seed-min.js" charset="utf-8"></script>
+    <link rel="stylesheet" href="http://g.tbcdn.cn/kissy/k/1.4.1/css/dpl/base-min.css">
+<script>var S = KISSY;S.config({packages:[{name:"kg",path:"http://g.tbcdn.cn/kg/",charset:"utf-8",ignorePackageNameInUri:true}]});if (S.Config.debug){var srcPath = "../";S.config({packages:[{name:"kg/superbase/2.0.0",path:srcPath,charset:"utf-8",ignorePackageNameInUri:true}]});}</script></head>
+<body>
+<h2>Superbase生命周期</h2>
+<p>打开console查看</p>
+
+<script>
+    var S = KISSY;
+    
+    if (S.Config.debug) {
+        var srcPath = "../../../";
+        S.config({
+            packages:[
+                {
+                    name:"gallery-back",
+                    path:srcPath,
+                    charset:"utf-8",
+                    ignorePackageNameInUri:true
+                }
+            ]
+        });
+    }
+
+    S.use('kg/superbase/2.0.0/', function (S, SuperBase) {
+        
+        //Widget扩展
+        function Ext() {
+            console.log('Ext constructor');
+        }
+        
+        Ext.prototype = {
+            
+            initializer: function() {
+                console.log('Ext initializer');
+            },
+            
+            destructor: function() {
+                console.log('Ext destructor');
+            }
+            
+        };
+        
+        //Widget组件
+        var Widget = SuperBase.extend([Ext], {
+            
+            initializer: function() {
+                console.log('Widget initializer');
+            },
+            
+            destructor: function() {
+                console.log('Widget destructor');
+            }
+            
+        });
+        
+        //Box扩展
+        function BoxExt() {
+            console.log('BoxExt constructor');
+        }
+        
+        BoxExt.prototype = {
+            
+            initializer: function() {
+                console.log('BoxExt initializer');
+                
+                this.doBefore(function() {
+                    console.log('doBefore render');
+                }, this, 'render');
+                
+                this.doAfter(function() {
+                    console.log('doAfter render');
+                }, this, 'render');
+            },
+            
+            destructor: function() {
+                console.log('BoxExt destructor');
+            }
+            
+        };
+        
+        //Box组件
+        var Box = Widget.extend({
+            
+            initializer: function() {
+                console.log('Box initializer');
+                
+                this.on('render', function(e) {
+                    console.log('on render'); 
+                });
+                
+                this.after('render', function(e) {
+                    console.log('after render');
+                });
+                
+                this.on('visibleChange', function(e) {
+                    console.log('beforeVisibleChange'); 
+                });
+                
+                this.after('visibleChange', function(e) {
+                    console.log('afterVisibleChange'); 
+                });
+                
+            },
+            
+            render: function() {
+                this.fire('render'); 
+                return this; 
+            },
+            
+            destructor: function() {
+                console.log('Box destructor');
+            },
+            
+            _defRenderFn: function() {
+                console.log('def render');
+            }
+            
+        }, {
+            
+            ATTRS: {
+                visible: {
+                    value: false
+                }
+            }
+            
+        });
+        
+        Box.mix(BoxExt);
+        
+        var box = new Box();
+        box.render();
+        box.set('visible', true);
+        box.destroy();
+        
+        // 执行顺序
+        
+        // Base constructor
+        // SuperBase constructor
+        // Widget constructor
+        // Ext constructor
+        // Widget initializer
+        // Ext initializer
+        // Box constructor
+        // BoxExt constructor
+        // Box initializer
+        // BoxExt initializer
+        // doBefore render
+        // on render
+        // def render
+        // after render
+        // doAfter render
+        // beforeVisibleChange
+        // afterVisibleChange
+        // BoxExt destructor
+        // Box destructor
+        // Ext destructor
+        // Widget destructor
+        
+    });
+</script>
+</body>
+</html>
